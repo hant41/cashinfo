@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#173f35">
+    <meta name="description" content="Tra cứu danh sách phúng viếng">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="stylesheet" href="./style.css">
+
+    <title>Tra cứu phúng viếng</title>
+
+</head>
+
+<body>
+
+    <header>
+        <h1>Tra cứu phúng viếng</h1>
+        <p>Nhập tên người hoặc đơn vị để tìm kiếm</p>
+    </header>
+
+    <main>
+
+        <!-- KHU VỰC TÌM KIẾM -->
+        <section class="search-box">
+
+            <label for="keyword">Tên cần tra cứu</label>
+
+            <div class="input-row">
+                <input id="keyword" type="search" placeholder="Ví dụ: Hà" autocomplete="off" enterkeyhint="search">
+
+                <button id="clear" type="button">Xóa</button>
+            </div>
+
+            <p class="hint">
+                Tìm kiếm theo tên, địa chỉ hoặc mối quan hệ.
+                Không phân biệt chữ hoa và chữ thường.
+            </p>
+
+        </section>
+
+        <!-- TIÊU ĐỀ KẾT QUẢ -->
+        <div class="summary">
+            <strong id="heading">Danh sách phúng viếng</strong>
+            <span id="count"></span>
+        </div>
+
+        <!-- DANH SÁCH KẾT QUẢ -->
+        <section id="results" aria-live="polite">
+            <div class="empty">
+                <strong>Đang tải dữ liệu...</strong>
+                Vui lòng chờ.
+            </div>
+        </section>
+
+        <footer>
+            Thông tin dành cho gia đình tra cứu
+        </footer>
+
+    </main>
+
+    <script>
+
+        // ============================================
+        // 1. KHAI BÁO BIẾN
+        // ============================================
+
+        let visitors = [];
+
+        const input = document.getElementById("keyword");
+        const results = document.getElementById("results");
+        const heading = document.getElementById("heading");
+        const count = document.getElementById("count");
+
+
+        // ============================================
+        // 2. CHUẨN HÓA CHUỖI
+        // ============================================
+
+        function normalize(value) {
+            return String(value ?? "")
+                .normalize("NFC")
+                .toLocaleLowerCase("vi")
+                .trim();
+        }
+
+
+        // ============================================
+        // 3. CHỐNG CHÈN HTML
+        // ============================================
+
+        function escapeHTML(value) {
+            return String(value ?? "").replace(/[&<>"']/g, char => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            })[char]);
+        }
+
+
+        // ============================================
+        // 4. ĐỊNH DẠNG SỐ TIỀN
+        // ============================================
+
+        function formatMoney(value) {
+            if (value === null || value === undefined || value === "") {
+                return "";
+            }
+
+            if (typeof value === "number") {
+                return new Intl.NumberFormat("vi-VN").format(value) + "đ";
+            }
+
+            return String(value).trim();
+        }
+
+
+        // ============================================
+        // 5. TẢI DỮ LIỆU JSON
+        // ============================================
+
+        async function loadData() {
+            try {
+                const response = await fetch("./data.json", {
+                    cache: "no-store"
+                });
+
+                if (!response.ok) {
+                    throw new Error("Không thể tải file data.json.");
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data.rows)) {
+                    throw new Error("Dữ liệu JSON không đúng cấu trúc.");
+                }
+
+                visitors = data.rows;
+
+                // Hiển thị toàn bộ danh sách ngay khi mở trang
+                count.textContent = visitors.length + " mục";
+
+                renderVisitors(visitors);
+
+            } catch (error) {
+                results.innerHTML = `
+      <div class="empty">
+        <strong>Lỗi tải dữ liệu</strong>
+        ${escapeHTML(error.message)}
+      </div>
+    `;
+
+                count.textContent = "";
+            }
+        }
+
+
+        // ============================================
+        // 6. HIỂN THỊ DANH SÁCH
+        // ============================================
+
+        function renderVisitors(list) {
+
+            if (list.length === 0) {
+                results.innerHTML = `
+      <div class="empty">
+        <strong>${escapeHTML(input.value.trim())} không phúng viếng</strong>
+        Không tìm thấy tên phù hợp trong danh sách.
+      </div>
+    `;
+                return;
+            }
+
+            results.innerHTML = list.map(person => `
+    <article class="item">
+
+      <div class="item-top">
+
+        <div class="item-title">
+          <span class="item-stt">
+            ${escapeHTML(person.stt)}.
+          </span>
+
+          ${escapeHTML(person.title)}
+        </div>
+
+        <div class="amount">
+          ${escapeHTML(formatMoney(person.amount))}
+        </div>
+
+      </div>
+
+      <div class="item-detail">
+        <span class="detail-label">Địa chỉ:</span>
+        ${escapeHTML(person.address || "Chưa có thông tin")}
+      </div>
+
+      <div class="item-detail">
+        <span class="detail-label">Mối quan hệ:</span>
+        ${escapeHTML(person.relationship || "Chưa có thông tin")}
+      </div>
+
+    </article>
+  `).join("");
+        }
+
+
+        // ============================================
+        // 7. TÌM KIẾM THEO TỪ NGUYÊN VẸN
+        // ============================================
+
+        /**function searchVisitors() {
+
+            const keyword = normalize(input.value);
+
+            // Nếu không nhập từ khóa:
+            // Hiển thị toàn bộ danh sách
+            if (!keyword) {
+
+                heading.textContent = "Danh sách phúng viếng";
+                count.textContent = visitors.length + " mục";
+
+                renderVisitors(visitors);
+
+                return;
+            }
+
+            // Tìm trong cột tên, địa chỉ và mối quan hệ
+            const matched = visitors.filter(person => {
+
+                const name = normalize(person.searchText);
+                const address = normalize(person.address);
+                const relationship = normalize(person.relationship);
+
+                const fields = [name, address, relationship];
+
+                // Chỉ khớp từ nguyên vẹn
+                return fields.some(field => {
+
+                    const words = field.split(/[\s,;()]+/);
+
+                    return words.includes(keyword);
+
+                });
+
+            });
+
+            heading.textContent = "Kết quả tìm kiếm";
+            count.textContent = matched.length + " kết quả";
+
+            // Hiển thị kết quả
+            renderVisitors(matched);
+        }**/
+
+        function searchVisitors() {
+
+            const keyword = normalize(input.value);
+
+            // Nếu không nhập từ khóa:
+            // Hiển thị toàn bộ danh sách
+            if (!keyword) {
+
+                heading.textContent = "Danh sách phúng viếng";
+                count.textContent = visitors.length + " mục";
+
+                renderVisitors(visitors);
+
+                return;
+            }
+
+            // Tìm trong cột tên, địa chỉ và mối quan hệ
+            const matched = visitors.filter(person => {
+
+                const fields = [
+                    person.searchText,
+                    person.address,
+                    person.relationship
+                ];
+
+                return fields.some(value => {
+
+                    const text = normalize(value);
+
+                    //Tách thành các từ để kiểm tra cụm từ nguyên vẹn
+                    const words = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+                    const keywordWords = keyword
+                        .split(/[^\p{L}\p{N}]+/u)
+                        .filter(Boolean);
+
+                    //CỤm từ ohair xuất hiện liên tiếp và đúng thứ tự
+                    for (let i = 0; i<= words.length - keywordWords.length; i++){
+
+                        const matchedPhrase = keywordWords.every(
+                            (word, index) => words[i + index] === word
+                        );
+
+                        if(matchedPhrase){
+                            return true;
+                        }
+                    }
+                    return false;
+
+                });
+
+            });
+
+            heading.textContent = "Kết quả tìm kiếm";
+            count.textContent = matched.length + " kết quả";
+
+            // Hiển thị kết quả
+            renderVisitors(matched);
+        }
+
+        // ============================================
+        // 8. NÚT XÓA TỪ KHÓA
+        // ============================================
+
+        input.addEventListener("input", searchVisitors);
+
+        document.getElementById("clear").addEventListener("click", () => {
+
+            input.value = "";
+
+            searchVisitors();
+
+            input.focus();
+
+        });
+
+
+        // ============================================
+        // 9. KHỞI ĐỘNG ỨNG DỤNG
+        // ============================================
+
+        loadData();
+
+    </script>
+
+</body>
+
+</html>
